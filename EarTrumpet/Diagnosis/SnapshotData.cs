@@ -67,6 +67,7 @@ namespace EarTrumpet.Diagnosis
                 {
                     { "IsLightTheme", () => SystemSettings.IsLightTheme },
                     { "IsSystemLightTheme", () => SystemSettings.IsSystemLightTheme },
+                    { "UseTaskbarMiddleClickMute", () => EarTrumpet.App.Settings?.UseTaskbarMiddleClickMute },
                     { "IsRTL", () => SystemSettings.IsRTL },
                     { "IsTransparencyEnabled", () => SystemSettings.IsTransparencyEnabled },
                     { "UseAccentColor", () => SystemSettings.UseAccentColor },

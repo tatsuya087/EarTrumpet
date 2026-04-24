@@ -29,6 +29,9 @@ namespace EarTrumpet.Interop.Helpers
         public delegate int MiddleClickHandler(object sender, MouseEventArgs e);
         public event MiddleClickHandler MiddleClickEvent;
 
+        public delegate int MiddleClickUpHandler(object sender, MouseEventArgs e);
+        public event MiddleClickUpHandler MiddleClickUpEvent;
+
         private const int WM_MOUSEWHEEL = 0x020A;
         private const int WM_MBUTTONDOWN = 0x0207;
         private const int WM_MBUTTONUP = 0x0208;
@@ -79,6 +82,16 @@ namespace EarTrumpet.Interop.Helpers
             {
                 MouseLLHookStruct MyMouseHookStruct = (MouseLLHookStruct)Marshal.PtrToStructure(lParam, typeof(MouseLLHookStruct));
                 int result = MiddleClickEvent(this, new MouseEventArgs(MouseButtons.Middle, 1, MyMouseHookStruct.pt.x, MyMouseHookStruct.pt.y, 0));
+                if (result != 0)
+                {
+                    return result;
+                }
+            }
+
+            if (msgType == WM_MBUTTONUP && MiddleClickUpEvent != null)
+            {
+                MouseLLHookStruct MyMouseHookStruct = (MouseLLHookStruct)Marshal.PtrToStructure(lParam, typeof(MouseLLHookStruct));
+                int result = MiddleClickUpEvent(this, new MouseEventArgs(MouseButtons.Middle, 1, MyMouseHookStruct.pt.x, MyMouseHookStruct.pt.y, 0));
                 if (result != 0)
                 {
                     return result;
