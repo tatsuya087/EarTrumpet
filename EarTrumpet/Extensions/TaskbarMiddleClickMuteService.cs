@@ -1,11 +1,13 @@
+using EarTrumpet.Interop;
 using EarTrumpet.Interop.Helpers;
 using EarTrumpet.UI.ViewModels;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Forms;
+using System.Windows.Threading;
 
 namespace EarTrumpet.Extensions
 {
@@ -14,7 +16,6 @@ namespace EarTrumpet.Extensions
         private readonly MouseHook _mouseHook;
         private readonly DeviceCollectionViewModel _collectionViewModel;
         private readonly AppSettings _settings;
-        private bool _suppressNextMiddleClickUp;
         private bool _disposed;
 
         public TaskbarMiddleClickMuteService(DeviceCollectionViewModel collectionViewModel, AppSettings settings)
@@ -41,35 +42,50 @@ namespace EarTrumpet.Extensions
                     return 0;
                 }
 
-                var candidates = GetTaskbarButtonCandidates(e.X, e.Y);
+                var candidates = GetTaskbarButtonCandidatesAtPoint(e.X, e.Y);
                 if (candidates.Count == 0)
                 {
                     return 0;
                 }
 
-                if (ToggleMuteForApp(candidates))
-                {
-                    _suppressNextMiddleClickUp = true;
-                    return 1;
-                }
-            }
-            catch (Exception ex)
-            {
-                Trace.WriteLine($"TaskbarMiddleClickMuteService OnMiddleClick error: {ex.Message}");
-            }
-
-            return 0;
-        }
-
-        private int OnMiddleClickUp(object sender, MouseEventArgs e)
-        {
-            if (_suppressNextMiddleClickUp)
-            {
-                _suppressNextMiddleClickUp = false;
+                ScheduleToggleMute(candidates);
                 return 1;
             }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
 
-            return 0;
+        private int OnMiddleClickUp(object sender, MouseEventArgs e) => 0;
+
+        private void ScheduleToggleMute(List<string> candidates)
+        {
+            if (System.Windows.Application.Current?.Dispatcher == null)
+            {
+                return;
+            }
+
+            var dispatcher = System.Windows.Application.Current.Dispatcher;
+            var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(100),
+            };
+
+            timer.Tick += (_, __) =>
+            {
+                timer.Stop();
+
+                try
+                {
+                    ToggleMuteForApp(candidates);
+                }
+                catch (Exception)
+                {
+                }
+            };
+
+            timer.Start();
         }
 
         private bool IsClickOnTaskbar(int x, int y)
@@ -78,7 +94,6 @@ namespace EarTrumpet.Extensions
             {
                 var taskbarState = WindowsTaskbar.Current;
                 var point = new System.Drawing.Point(x, y);
-
                 var rect = taskbarState.Size;
                 var bounds = new System.Drawing.Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
                 return bounds.Contains(point);
@@ -89,120 +104,108 @@ namespace EarTrumpet.Extensions
             }
         }
 
-        private List<string> GetTaskbarButtonCandidates(int x, int y)
+        private List<string> GetTaskbarButtonCandidatesAtPoint(int x, int y)
         {
             var candidates = new List<string>();
 
             try
             {
-                var point = new System.Windows.Point(x, y);
-                var element = AutomationElement.FromPoint(point);
-
+                var element = TryFindTaskbarButtonElement(x, y);
                 if (element != null)
                 {
-                    var current = element;
-                    const int maxDepth = 10;
-                    int depth = 0;
-
-                    while (current != null && depth < maxDepth)
-                    {
-                        TryAddCandidate(candidates, current.Current.Name);
-                        TryAddCandidate(candidates, current.Current.AutomationId);
-                        TryAddCandidate(candidates, current.Current.HelpText);
-                        TryAddCandidate(candidates, current.Current.ItemStatus);
-
-                        try
-                        {
-                            current = TreeWalker.ControlViewWalker.GetParent(current);
-                            depth++;
-                        }
-                        catch
-                        {
-                            break;
-                        }
-                    }
+                    CollectCandidatesFromElement(candidates, element, TreeWalker.RawViewWalker);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Trace.WriteLine($"TaskbarMiddleClickMuteService GetTaskbarButtonCandidates error: {ex.Message}");
             }
 
             if (candidates.Count == 0)
             {
-                TryCollectCandidatesFromTaskbarTree(candidates, x, y);
+                TryCollectCandidatesFromPoint(candidates, x, y);
             }
 
             return candidates;
         }
 
-        private void TryCollectCandidatesFromTaskbarTree(List<string> candidates, int x, int y)
+        private void TryCollectCandidatesFromPoint(List<string> candidates, int x, int y)
         {
             try
             {
-                var taskbar = AutomationElement.FromHandle(WindowsTaskbar.GetHwnd());
-                if (taskbar == null)
+                var point = new Point(x, y);
+                var element = AutomationElement.FromPoint(point);
+                if (element == null)
                 {
                     return;
                 }
 
-                var condition = new OrCondition(
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Custom));
+                CollectCandidatesFromElement(candidates, element, TreeWalker.ControlViewWalker);
+            }
+            catch (Exception)
+            {
+            }
+        }
 
-                var elements = taskbar.FindAll(TreeScope.Descendants, condition);
-                AutomationElement bestMatch = null;
-                double bestArea = double.MaxValue;
-                var point = new System.Windows.Point(x, y);
+        private AutomationElement TryFindTaskbarButtonElement(int x, int y)
+        {
+            var taskbar = AutomationElement.FromHandle(WindowsTaskbar.GetHwnd());
+            if (taskbar == null)
+            {
+                return null;
+            }
 
-                foreach (AutomationElement element in elements)
+            var condition = new OrCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Custom));
+
+            var elements = taskbar.FindAll(TreeScope.Descendants, condition);
+            AutomationElement bestMatch = null;
+            double bestArea = double.MaxValue;
+            var point = new Point(x, y);
+
+            foreach (AutomationElement element in elements)
+            {
+                var rect = element.Current.BoundingRectangle;
+                if (rect.IsEmpty || rect.Width <= 0 || rect.Height <= 0 || !rect.Contains(point))
                 {
-                    var rect = element.Current.BoundingRectangle;
-                    if (rect.IsEmpty || rect.Width <= 0 || rect.Height <= 0 || !rect.Contains(point))
-                    {
-                        continue;
-                    }
-
-                    var area = rect.Width * rect.Height;
-                    if (area < bestArea)
-                    {
-                        bestArea = area;
-                        bestMatch = element;
-                    }
+                    continue;
                 }
 
-                if (bestMatch == null)
+                var area = rect.Width * rect.Height;
+                if (area < bestArea)
                 {
-                    return;
-                }
-
-                var current = bestMatch;
-                const int maxDepth = 10;
-                int depth = 0;
-
-                while (current != null && depth < maxDepth)
-                {
-                    TryAddCandidate(candidates, current.Current.Name);
-                    TryAddCandidate(candidates, current.Current.AutomationId);
-                    TryAddCandidate(candidates, current.Current.HelpText);
-                    TryAddCandidate(candidates, current.Current.ItemStatus);
-
-                    try
-                    {
-                        current = TreeWalker.RawViewWalker.GetParent(current);
-                        depth++;
-                    }
-                    catch
-                    {
-                        break;
-                    }
+                    bestArea = area;
+                    bestMatch = element;
                 }
             }
-            catch (Exception ex)
+
+            return bestMatch;
+        }
+
+        private void CollectCandidatesFromElement(List<string> candidates, AutomationElement element, TreeWalker walker)
+        {
+            var current = element;
+            const int maxDepth = 10;
+            int depth = 0;
+
+            while (current != null && depth < maxDepth)
             {
-                Trace.WriteLine($"TaskbarMiddleClickMuteService fallback tree search error: {ex.Message}");
+                TryAddCandidate(candidates, current.Current.Name);
+                TryAddCandidate(candidates, current.Current.AutomationId);
+                TryAddCandidate(candidates, current.Current.HelpText);
+                TryAddCandidate(candidates, current.Current.ItemStatus);
+
+                try
+                {
+                    current = walker.GetParent(current);
+                    depth++;
+                }
+                catch
+                {
+                    break;
+                }
             }
         }
 
