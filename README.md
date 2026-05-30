@@ -11,7 +11,7 @@ You can download at [Release page](https://github.com/tatsuya087/EarTrumpet/rele
 
 ## Configuration
 
-After launching the app:
+Launch `EarTrumpet.exe`
 
 1. Open `Settings`
 2. Open `Mouse`
