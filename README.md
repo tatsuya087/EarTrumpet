@@ -4,7 +4,7 @@ This repository is a fork of [EarTrumpet](https://github.com/File-New-Project/Ea
 
 The fork adds a configurable action that lets you middle-click a running app icon on the Windows taskbar to toggle that app's mute state without opening the EarTrumpet flyout.
 
-![EarTrumpet Screenshot](./Graphics/hero.gif)
+![EarTrumpet Screenshot](./Graphics/1.gif)
 
 ## What This Fork Adds
 
