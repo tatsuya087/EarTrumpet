@@ -6,6 +6,19 @@ The fork adds a configurable action that lets you middle-click a running app ico
 
 ![EarTrumpet Screenshot](./Graphics/1.gif)
 
+## Download
+You can download at [Release page](https://github.com/tatsuya087/EarTrumpet/releases)
+
+## Configuration
+
+After launching the app:
+
+1. Open `Settings`
+2. Open `Mouse`
+3. Enable `Middle-click on a taskbar app icon to toggle mute`
+
+The option is off by default to avoid changing standard taskbar behavior unless explicitly enabled.
+
 ## What This Fork Adds
 
 * Middle-click any running app icon on the taskbar to mute or unmute that app
@@ -48,21 +61,9 @@ Windows 11 required additional taskbar detection handling in this fork because t
 
 ## Building
 
-If you want to use this fork, build it from source:
-
-* [Compiling EarTrumpet](./COMPILING.md)
+[Compiling EarTrumpet](./COMPILING.md)
 
 The generated binaries are placed under `Build\Debug` or `Build\Release` depending on the selected configuration.
-
-## Configuration
-
-After launching the app:
-
-1. Open `Settings`
-2. Open `Mouse`
-3. Enable `Middle-click on a taskbar app icon to toggle mute`
-
-The option is off by default to avoid changing standard taskbar behavior unless explicitly enabled.
 
 ## Documentation
 
